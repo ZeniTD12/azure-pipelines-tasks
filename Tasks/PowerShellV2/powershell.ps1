@@ -68,6 +68,10 @@ try {
         $contents += '    exit $LASTEXITCODE'
         $contents += '}'
     }
+    
+    Assert-VstsAgent -Minimum '2.115.0'
+    $tempDirectory = Get-VstsTaskVariable -Name 'agent.tempDirectory' -Require
+    $contents += New-Item -Path $tempDirectory\scriptFinished -ItemType File
 
     $joinedContents = [System.String]::Join(
         ([System.Environment]::NewLine),
@@ -86,8 +90,6 @@ try {
     }
 
     # Write the script to disk.
-    Assert-VstsAgent -Minimum '2.115.0'
-    $tempDirectory = Get-VstsTaskVariable -Name 'agent.tempDirectory' -Require
     Assert-VstsPath -LiteralPath $tempDirectory -PathType 'Container'
     $filePath = [System.IO.Path]::Combine($tempDirectory, "$([System.Guid]::NewGuid()).ps1")
     $null = [System.IO.File]::WriteAllText(
@@ -179,6 +181,13 @@ try {
             $failed = $true
             Write-VstsTaskError -Message (Get-VstsLocString -Key 'PS_ExitCode' -ArgumentList $LASTEXITCODE)
         }
+    }
+
+    # Fail on killed PowerShell process
+    if (!(Test-Path $tempDirectory\scriptFinished)) {
+        $failed = $true
+        Write-Verbose "PowerShell script was not finished"
+        Write-VstsTaskError -Message (Get-VstsLocString -Key 'PS_UnableToDetermineExitCode')
     }
 
     # Fail if any errors.
